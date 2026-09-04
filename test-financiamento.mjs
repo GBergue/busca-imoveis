@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const { taxaMensal, calcularParcelasPrice } = require("./financiamento-calc.cjs");
+const { taxaMensal, calcularParcelasPrice } = require("./financiamento-calc.js");
 
 // taxaMensal: round-trip deve devolver a taxa anual original
 for (const ta of [0, 0.05, 0.1, 0.15]) {
