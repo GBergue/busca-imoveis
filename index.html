@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Busca de Imóveis</title>
+<style>
+  :root { color-scheme: light dark; --bd: #8883; --mut: #8886; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, sans-serif; padding: 20px; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .barra input, .barra select { padding: 6px 8px; border: 1px solid var(--bd); border-radius: 6px; font: inherit; background: transparent; color: inherit; }
+  .barra input[type=number] { width: 120px; }
+  .resumo { color: var(--mut); margin-bottom: 12px; }
+  .resumo b { color: inherit; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--bd); vertical-align: top; }
+  th { position: sticky; top: 0; background: Canvas; cursor: pointer; white-space: nowrap; user-select: none; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  th[aria-sort=ascending]::after { content: " ▲"; }
+  th[aria-sort=descending]::after { content: " ▼"; }
+  tr:hover td { background: #8881; }
+  img { width: 96px; height: 68px; object-fit: cover; border-radius: 4px; display: block; background: #8882; }
+  a { color: inherit; }
+  .tags { color: var(--mut); font-size: 12px; }
+  .erro td { color: #c33; }
+  .vazio { color: var(--mut); padding: 40px 0; }
+</style>
+</head>
+<body>
+<h1>Busca de Imóveis</h1>
+
+<div class="barra">
+  <input id="q" type="search" placeholder="bairro, cidade, título…">
+  <select id="quartos">
+    <option value="">quartos (todos)</option>
+    <option value="1">1+</option><option value="2">2+</option>
+    <option value="3">3+</option><option value="4">4+</option>
+  </select>
+  <input id="pmin" type="number" placeholder="preço mín">
+  <input id="pmax" type="number" placeholder="preço máx">
+</div>
+
+<div class="resumo" id="resumo"></div>
+
+<table>
+  <thead><tr id="cab"></tr></thead>
+  <tbody id="corpo"></tbody>
+</table>
+<div class="vazio" id="vazio" hidden>Nenhum imóvel. Rode <code>node scrape.mjs &lt;url&gt;</code> e recarregue.</div>
+
+<script src="data.js"></script>
+<script>
+const COLS = [
+  { k: "foto",       t: "",          fmt: v => v ? `<img src="${v}" loading="lazy">` : "", sort: false },
+  { k: "titulo",     t: "Anúncio",   fmt: (v, r) => `<a href="${r.url}" target="_blank" rel="noopener">${v || r.url}</a>` +
+                                                    (r.caracteristicas?.length ? `<div class="tags">${r.caracteristicas.join(" · ")}</div>` : "") },
+  { k: "tipo",       t: "Tipo" },
+  { k: "bairro",     t: "Bairro" },
+  { k: "cidade",     t: "Cidade" },
+  { k: "quartos",    t: "Q",  num: true },
+  { k: "suites",     t: "Su", num: true },
+  { k: "banheiros",  t: "Ba", num: true },
+  { k: "vagas",      t: "Vg", num: true },
+  { k: "area_util",  t: "m²", num: true, fmt: v => v ?? "" },
+  { k: "preco",      t: "Preço", num: true, fmt: v => v == null ? "" : "R$ " + v.toLocaleString("pt-BR") },
+  { k: "rs_m2",      t: "R$/m²", num: true, fmt: v => v == null ? "" : Math.round(v).toLocaleString("pt-BR") },
+  { k: "condominio", t: "Cond.", num: true, fmt: v => v == null ? "" : "R$ " + v.toLocaleString("pt-BR") },
+];
+
+const dados = (window.IMOVEIS || []).map(r => ({
+  ...r,
+  rs_m2: (r.preco && r.area_util) ? r.preco / r.area_util : null,
+}));
+
+let ordem = { k: "rs_m2", dir: 1 };
+
+const cab = document.getElementById("cab");
+COLS.forEach(c => {
+  const th = document.createElement("th");
+  th.textContent = c.t;
+  if (c.num) th.className = "num";
+  if (c.sort !== false) th.onclick = () => {
+    ordem.dir = ordem.k === c.k ? -ordem.dir : 1;
+    ordem.k = c.k;
+    render();
+  };
+  cab.appendChild(th);
+});
+
+const $ = id => document.getElementById(id);
+["q", "quartos", "pmin", "pmax"].forEach(id => $(id).addEventListener("input", render));
+
+function filtrar() {
+  const q = $("q").value.trim().toLowerCase();
+  const mq = +$("quartos").value || 0;
+  const pmin = +$("pmin").value || 0;
+  const pmax = +$("pmax").value || Infinity;
+  return dados.filter(r => {
+    if (r.erro) return !q && !mq && !pmin && pmax === Infinity;
+    if (q && !`${r.titulo} ${r.bairro} ${r.cidade} ${r.tipo}`.toLowerCase().includes(q)) return false;
+    if (mq && !(r.quartos >= mq)) return false;
+    if (r.preco != null && (r.preco < pmin || r.preco > pmax)) return false;
+    if (r.preco == null && (pmin || pmax !== Infinity)) return false;
+    return true;
+  });
+}
+
+function render() {
+  [...cab.children].forEach((th, i) =>
+    th.setAttribute("aria-sort", COLS[i].k === ordem.k ? (ordem.dir === 1 ? "ascending" : "descending") : "none"));
+
+  let linhas = filtrar();
+  linhas.sort((a, b) => {
+    const x = a[ordem.k], y = b[ordem.k];
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return (typeof x === "number" ? x - y : String(x).localeCompare(y)) * ordem.dir;
+  });
+
+  const corpo = document.getElementById("corpo");
+  corpo.innerHTML = linhas.map(r => r.erro
+    ? `<tr class="erro"><td></td><td><a href="${r.url}" target="_blank" rel="noopener">${r.url}</a></td><td colspan="${COLS.length - 2}">erro: ${r.erro}</td></tr>`
+    : "<tr>" + COLS.map(c => {
+        const v = r[c.k];
+        const val = c.fmt ? c.fmt(v, r) : (v ?? "");
+        return `<td class="${c.num ? "num" : ""}">${val}</td>`;
+      }).join("") + "</tr>"
+  ).join("");
+
+  const validos = linhas.filter(r => !r.erro && r.preco);
+  const media = arr => arr.length ? arr.reduce((s, n) => s + n, 0) / arr.length : 0;
+  document.getElementById("resumo").innerHTML =
+    `<b>${linhas.filter(r => !r.erro).length}</b> imóveis · ` +
+    `preço médio <b>R$ ${Math.round(media(validos.map(r => r.preco))).toLocaleString("pt-BR")}</b> · ` +
+    `R$/m² médio <b>${Math.round(media(validos.filter(r => r.rs_m2).map(r => r.rs_m2))).toLocaleString("pt-BR")}</b>`;
+
+  document.getElementById("vazio").hidden = dados.length > 0;
+}
+
+render();
+</script>
+</body>
+</html>

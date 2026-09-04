@@ -1,0 +1,3 @@
+{
+  "_comentario": "Correções manuais por URL. Ex: \"https://site.com/imovel/123\": { \"bairro\": \"Centro\", \"preco\": 445000 }. Rode scrape.mjs de novo para aplicar."
+}
