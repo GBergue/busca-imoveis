@@ -38,6 +38,8 @@ Rode `scrape.mjs` de novo para aplicar (os campos do override vencem os raspados
 | `data.json`     | fonte da verdade (lista de imóveis) |
 | `data.js`       | mesma lista, gerada para o dashboard |
 | `overrides.json`| correções manuais por URL |
+| `financiamento.html` | simulador de financiamento (PRICE/SAC) vs investimento, com cenários salvos localmente |
+| `financiamento-calc.js` | funções puras de cálculo de financiamento/investimento. Tem teste (`npm test`) |
 | `condominios.js`| características por condomínio (curado à mão); o dashboard casa cada imóvel a um condomínio por palavra-chave |
 
 ## Condomínios
