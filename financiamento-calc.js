@@ -62,15 +62,20 @@ function calcularFinanciamento(valorFinanciado, taxaAnual, prazoAnos, tipo, amor
     : calcularParcelasPrice(valorFinanciado, taxaAnual, prazoAnos, amortizacaoExtra);
 }
 
+// aporteMensal: número (aporte fixo) ou função mes => aporte (aporte que varia
+// mês a mês, ex: orçamento mensal menos a parcela do financiamento naquele mês).
 function evoluirInvestimento(valorInicial, aporteMensal, taxaAnual, numMeses) {
   const i = taxaMensal(taxaAnual);
+  const aporte = typeof aporteMensal === "function" ? aporteMensal : () => aporteMensal;
   const meses = [];
   let saldo = valorInicial;
+  let totalAportado = valorInicial;
   for (let mes = 1; mes <= numMeses; mes++) {
-    saldo = saldo * (1 + i) + aporteMensal;
+    const ap = aporte(mes);
+    saldo = saldo * (1 + i) + ap;
+    totalAportado += ap;
     meses.push({ mes, saldo });
   }
-  const totalAportado = valorInicial + aporteMensal * numMeses;
   return { meses, saldoFinal: saldo, totalAportado };
 }
 

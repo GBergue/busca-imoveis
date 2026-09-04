@@ -30,6 +30,9 @@
   .card .resumo { display: flex; flex-wrap: wrap; gap: 4px 20px; color: var(--mut); margin-bottom: 10px; font-size: 13px; }
   .card .resumo b { color: inherit; }
   canvas { max-width: 100%; border: 1px solid var(--bd); border-radius: 6px; }
+  .legenda { display: flex; gap: 14px; font-size: 12px; color: var(--mut); margin-bottom: 6px; }
+  .legenda span { display: flex; align-items: center; gap: 5px; }
+  .legenda i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   details table { margin-top: 10px; }
   .vazio { color: var(--mut); padding: 20px 0; }
 </style>
@@ -37,6 +40,11 @@
 <body>
 <a class="voltar" href="index.html">← imóveis</a>
 <h1>Financiamento vs Investimento</h1>
+
+<div class="campo" style="margin:16px 0 4px;">
+  <label for="orcamentoMensal">Orçamento mensal disponível (R$) — aluguel/parcela + investimento</label>
+  <input id="orcamentoMensal" type="number" min="0" step="0.01" placeholder="2500" style="width:140px;">
+</div>
 
 <form id="novoCenario">
   <div class="campo"><label for="nome">Nome (opcional)</label><input id="nome" type="text" placeholder="SAC 9% 25 anos"></div>
@@ -68,7 +76,6 @@
     <legend>Investimento</legend>
     <div class="grupo">
       <div class="campo"><label for="valorInicial">Valor investido inicial (R$)</label><input id="valorInicial" type="number" min="0" step="0.01" value="0"></div>
-      <div class="campo"><label for="aporteMensal">Aporte mensal (R$)</label><input id="aporteMensal" type="number" required min="0" step="0.01"></div>
       <div class="campo"><label for="taxaInv">Rendimento ao ano (%)</label><input id="taxaInv" type="number" required min="0" step="0.01"></div>
       <div class="campo"><label for="aliquotaIR">IR sobre o rendimento (%)</label><input id="aliquotaIR" type="number" min="0" step="0.01" value="0"></div>
     </div>
@@ -77,7 +84,7 @@
 </form>
 
 <h2>Comparativo</h2>
-<p style="color:var(--mut); font-size:12px; margin:0 0 10px;">Cenário de financiamento: patrimônio final = imóvel (valorizado, se você informar valorização/ano) + saldo investido líquido de IR, pagando a parcela <b>e</b> aportando o valor de investimento todo mês; amortização extra reduz o prazo, não a parcela. Cenário de aluguel: patrimônio final = só o saldo investido líquido de IR, pelo prazo de simulação informado. O aporte sugerido no financiamento é a parcela do mês 1 — ajuste-o se quiser comparar cenários com o mesmo esforço mensal.</p>
+<p style="color:var(--mut); font-size:12px; margin:0 0 10px;">O aporte mensal de cada cenário é o <b>orçamento mensal</b> acima menos o custo de moradia daquele mês: a parcela (+ amortização extra) no financiamento, ou o aluguel fixo no aluguel — assim, quando a parcela cai (SAC) ou o financiamento quita, mais sobra pra investir. Cenário de financiamento: patrimônio final = imóvel (valorizado, se você informar valorização/ano) + saldo investido líquido de IR. Cenário de aluguel: patrimônio final = só o saldo investido líquido de IR, pelo prazo de simulação informado.</p>
 <table id="comparativo">
   <thead><tr><th>Cenário</th><th class="num">Total pago</th><th class="num">Total juros</th><th class="num">Saldo investido (líq. IR)</th><th class="num">Patrimônio final</th></tr></thead>
   <tbody id="comparativoCorpo"></tbody>
@@ -104,13 +111,12 @@ const salvarCenarios = cs => localStorage.setItem(CHAVE, JSON.stringify(cs));
 
 let cenarios = lerCenarios();
 
-function atualizarAporteSugerido() {
-  const vf = +$("valorFinanciado").value, ta = +$("taxaFin").value / 100, pa = +$("prazoAnos").value, tipo = $("tipo").value;
-  if (!vf || !ta || !pa) return;
-  const r = calcularFinanciamento(vf, ta, pa, tipo);
-  $("aporteMensal").value = r.meses[0].parcela.toFixed(2);
-}
-["valorFinanciado", "taxaFin", "prazoAnos", "tipo"].forEach(id => $(id).addEventListener("input", atualizarAporteSugerido));
+const CHAVE_ORCAMENTO = "financiamento_orcamento";
+$("orcamentoMensal").value = localStorage.getItem(CHAVE_ORCAMENTO) || "";
+$("orcamentoMensal").addEventListener("input", () => {
+  localStorage.setItem(CHAVE_ORCAMENTO, $("orcamentoMensal").value);
+  render();
+});
 
 $("tipoCenario").addEventListener("change", () => {
   const aluguel = $("tipoCenario").value === "aluguel";
@@ -122,16 +128,19 @@ $("tipoCenario").addEventListener("change", () => {
 });
 
 function calcularCenario(c) {
-  const { valorInicial, aporteMensal, taxaAnual: taxaInv, aliquotaIR } = c.investimento;
+  const { valorInicial, taxaAnual: taxaInv, aliquotaIR } = c.investimento;
+  const orcamento = +$("orcamentoMensal").value || 0;
   if (c.tipo === "aluguel") {
     const numMeses = c.aluguel.prazoAnos * 12;
-    const inv = evoluirInvestimento(valorInicial, aporteMensal, taxaInv, numMeses);
+    const aporte = orcamento - c.aluguel.valorMensal;
+    const inv = evoluirInvestimento(valorInicial, aporte, taxaInv, numMeses);
     const saldoLiquido = aplicarIR(inv.saldoFinal, inv.totalAportado, aliquotaIR);
     return { inv, saldoLiquido, patrimonio: saldoLiquido, totalPago: c.aluguel.valorMensal * numMeses };
   }
   const { valorFinanciado, taxaAnual, prazoAnos, tipo, amortizacaoExtra, valorizacaoAnual } = c.financiamento;
   const fin = calcularFinanciamento(valorFinanciado, taxaAnual, prazoAnos, tipo, amortizacaoExtra);
-  const inv = evoluirInvestimento(valorInicial, aporteMensal, taxaInv, fin.meses.length);
+  const aporte = mes => orcamento - (fin.meses[mes - 1].parcela + fin.meses[mes - 1].extra);
+  const inv = evoluirInvestimento(valorInicial, aporte, taxaInv, fin.meses.length);
   const saldoLiquido = aplicarIR(inv.saldoFinal, inv.totalAportado, aliquotaIR);
   const imovel = valorImovelFinal(valorFinanciado, valorizacaoAnual, fin.meses.length);
   const patrimonio = patrimonioFinal(imovel, saldoLiquido);
@@ -189,6 +198,7 @@ function render() {
         <span>saldo investido (líq. IR): <b>${fmt(r.saldoLiquido)}</b></span>
         <span>patrimônio final: <b>${fmt(r.patrimonio)}</b></span>
       </div>
+      ${r.fin ? `<div class="legenda"><span><i style="background:#e06666"></i>saldo devedor</span><span><i style="background:#6699e0"></i>saldo investido</span></div>` : ""}
       <canvas width="600" height="160"></canvas>
       <details>
         <summary>tabela mês a mês</summary>
@@ -222,7 +232,6 @@ $("novoCenario").addEventListener("submit", e => {
     tipo: tipoCenario,
     investimento: {
       valorInicial: +$("valorInicial").value,
-      aporteMensal: +$("aporteMensal").value,
       taxaAnual: +$("taxaInv").value / 100,
       aliquotaIR: +$("aliquotaIR").value / 100,
     },
