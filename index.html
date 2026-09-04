@@ -26,6 +26,28 @@
   .tags { color: var(--mut); font-size: 12px; }
   .erro td { color: #c33; }
   .vazio { color: var(--mut); padding: 40px 0; }
+  #ordenar { display: none; }
+  .tbwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  @media (max-width: 700px) {
+    body { padding: 12px; }
+    h1 { font-size: 16px; }
+    .barra { flex-direction: column; align-items: stretch; }
+    .barra input, .barra select { width: 100%; padding: 10px; }
+    .barra input[type=number] { width: 100%; }
+    #ordenar { display: block; }
+
+    table, tbody, tr, td { display: block; width: 100%; }
+    thead { display: none; }
+    tr { border: 1px solid var(--bd); border-radius: 8px; margin-bottom: 10px; padding: 10px; }
+    tr:hover td { background: transparent; }
+    td { border: none; padding: 3px 0; text-align: left; }
+    td.num { text-align: left; }
+    td:empty { display: none; }
+    td[data-label]::before { content: attr(data-label) ": "; color: var(--mut); }
+    td.foto img { width: 100%; height: auto; max-height: 220px; }
+    .erro td { padding: 3px 0; }
+  }
 </style>
 </head>
 <body>
@@ -40,14 +62,17 @@
   </select>
   <input id="pmin" type="number" placeholder="preço mín">
   <input id="pmax" type="number" placeholder="preço máx">
+  <select id="ordenar" aria-label="ordenar por"></select>
 </div>
 
 <div class="resumo" id="resumo"></div>
 
+<div class="tbwrap">
 <table>
   <thead><tr id="cab"></tr></thead>
   <tbody id="corpo"></tbody>
 </table>
+</div>
 <div class="vazio" id="vazio" hidden>Nenhum imóvel. Rode <code>node scrape.mjs &lt;url&gt;</code> e recarregue.</div>
 
 <script src="data.js"></script>
@@ -59,14 +84,14 @@ const COLS = [
   { k: "tipo",       t: "Tipo" },
   { k: "bairro",     t: "Bairro" },
   { k: "cidade",     t: "Cidade" },
-  { k: "quartos",    t: "Q",  num: true },
-  { k: "suites",     t: "Su", num: true },
-  { k: "banheiros",  t: "Ba", num: true },
-  { k: "vagas",      t: "Vg", num: true },
-  { k: "area_util",  t: "m²", num: true, fmt: v => v ?? "" },
+  { k: "quartos",    t: "Q",  m: "Quartos",   num: true },
+  { k: "suites",     t: "Su", m: "Suítes",    num: true },
+  { k: "banheiros",  t: "Ba", m: "Banheiros", num: true },
+  { k: "vagas",      t: "Vg", m: "Vagas",     num: true },
+  { k: "area_util",  t: "m²", m: "Área útil (m²)", num: true, fmt: v => v ?? "" },
   { k: "preco",      t: "Preço", num: true, fmt: v => v == null ? "" : "R$ " + v.toLocaleString("pt-BR") },
   { k: "rs_m2",      t: "R$/m²", num: true, fmt: v => v == null ? "" : Math.round(v).toLocaleString("pt-BR") },
-  { k: "condominio", t: "Cond.", num: true, fmt: v => v == null ? "" : "R$ " + v.toLocaleString("pt-BR") },
+  { k: "condominio", t: "Cond.", m: "Condomínio", num: true, fmt: v => v == null ? "" : "R$ " + v.toLocaleString("pt-BR") },
 ];
 
 const dados = (window.IMOVEIS || []).map(r => ({
@@ -92,6 +117,12 @@ COLS.forEach(c => {
 const $ = id => document.getElementById(id);
 ["q", "quartos", "pmin", "pmax"].forEach(id => $(id).addEventListener("input", render));
 
+const ord = $("ordenar");
+COLS.filter(c => c.sort !== false).forEach(c => {
+  ord.appendChild(new Option(c.t || c.k, c.k));
+});
+ord.onchange = () => { ordem.k = ord.value; ordem.dir = 1; render(); };
+
 function filtrar() {
   const q = $("q").value.trim().toLowerCase();
   const mq = +$("quartos").value || 0;
@@ -110,6 +141,7 @@ function filtrar() {
 function render() {
   [...cab.children].forEach((th, i) =>
     th.setAttribute("aria-sort", COLS[i].k === ordem.k ? (ordem.dir === 1 ? "ascending" : "descending") : "none"));
+  ord.value = ordem.k;
 
   let linhas = filtrar();
   linhas.sort((a, b) => {
@@ -125,7 +157,8 @@ function render() {
     : "<tr>" + COLS.map(c => {
         const v = r[c.k];
         const val = c.fmt ? c.fmt(v, r) : (v ?? "");
-        return `<td class="${c.num ? "num" : ""}">${val}</td>`;
+        const lbl = c.k === "titulo" ? "" : (c.m || c.t);
+        return `<td class="${c.k}${c.num ? " num" : ""}"${lbl ? ` data-label="${lbl}"` : ""}>${val}</td>`;
       }).join("") + "</tr>"
   ).join("");
 

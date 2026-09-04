@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-09-04T00:35:25.632Z",
+        "reason": "model decided: utilitarian data-table dashboard for a personal scraper; deliberately minimal type scale (12/14/18px), not a content page. User asked for mobile layout only, not a visual redesign."
+      }
+    ]
+  }
+}
