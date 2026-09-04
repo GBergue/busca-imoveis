@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Financiamento vs Investimento</title>
+<style>
+  :root { color-scheme: light dark; --bd: #8883; --mut: #8886; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, sans-serif; padding: 20px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 24px 0 8px; }
+  a.voltar { color: inherit; font-size: 13px; }
+  fieldset { border: 1px solid var(--bd); border-radius: 8px; margin: 0; padding: 10px 12px; }
+  legend { padding: 0 4px; color: var(--mut); font-size: 12px; }
+  form#novoCenario { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; margin: 16px 0 20px; }
+  form#novoCenario label { display: block; font-size: 12px; color: var(--mut); margin-bottom: 2px; }
+  form#novoCenario input, form#novoCenario select { padding: 6px 8px; border: 1px solid var(--bd); border-radius: 6px; font: inherit; background: transparent; color: inherit; width: 140px; }
+  form#novoCenario .campo { display: flex; flex-direction: column; }
+  form#novoCenario .grupo { display: flex; gap: 10px; flex-wrap: wrap; }
+  form#novoCenario button { align-self: flex-end; padding: 8px 14px; border: 1px solid var(--bd); border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--bd); }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .cards { display: flex; flex-direction: column; gap: 16px; }
+  .card { border: 1px solid var(--bd); border-radius: 8px; padding: 14px; }
+  .card h3 { margin: 0 0 8px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .card h3 button { font: inherit; color: inherit; background: transparent; border: 1px solid var(--bd); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+  .card .resumo { display: flex; flex-wrap: wrap; gap: 4px 20px; color: var(--mut); margin-bottom: 10px; font-size: 13px; }
+  .card .resumo b { color: inherit; }
+  canvas { max-width: 100%; border: 1px solid var(--bd); border-radius: 6px; }
+  details table { margin-top: 10px; }
+  .vazio { color: var(--mut); padding: 20px 0; }
+</style>
+</head>
+<body>
+<a class="voltar" href="index.html">← imóveis</a>
+<h1>Financiamento vs Investimento</h1>
+
+<form id="novoCenario">
+  <div class="campo"><label for="nome">Nome (opcional)</label><input id="nome" type="text" placeholder="SAC 9% 25 anos"></div>
+  <fieldset>
+    <legend>Financiamento</legend>
+    <div class="grupo">
+      <div class="campo"><label for="valorFinanciado">Valor financiado (R$)</label><input id="valorFinanciado" type="number" required min="0" step="0.01"></div>
+      <div class="campo"><label for="taxaFin">Taxa ao ano (%)</label><input id="taxaFin" type="number" required min="0" step="0.01"></div>
+      <div class="campo"><label for="prazoAnos">Prazo (anos)</label><input id="prazoAnos" type="number" required min="1" step="1"></div>
+      <div class="campo"><label for="tipo">Tipo</label>
+        <select id="tipo"><option value="PRICE">PRICE</option><option value="SAC">SAC</option></select>
+      </div>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Investimento</legend>
+    <div class="grupo">
+      <div class="campo"><label for="valorInicial">Valor investido inicial (R$)</label><input id="valorInicial" type="number" min="0" step="0.01" value="0"></div>
+      <div class="campo"><label for="aporteMensal">Aporte mensal (R$)</label><input id="aporteMensal" type="number" required min="0" step="0.01"></div>
+      <div class="campo"><label for="taxaInv">Rendimento ao ano (%)</label><input id="taxaInv" type="number" required min="0" step="0.01"></div>
+    </div>
+  </fieldset>
+  <button type="submit">Adicionar cenário</button>
+</form>
+
+<h2>Comparativo</h2>
+<table id="comparativo">
+  <thead><tr><th>Cenário</th><th class="num">Total pago</th><th class="num">Total juros</th><th class="num">Saldo investido</th><th class="num">Patrimônio final</th></tr></thead>
+  <tbody id="comparativoCorpo"></tbody>
+</table>
+
+<h2>Cenários</h2>
+<div class="cards" id="cards"></div>
+<div class="vazio" id="vazio" hidden>Nenhum cenário ainda. Preencha o formulário acima.</div>
+
+<script src="financiamento-calc.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const fmt = v => "R$ " + v.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+const CHAVE = "financiamento_cenarios";
+
+const lerCenarios = () => { try { return JSON.parse(localStorage.getItem(CHAVE)) || []; } catch { return []; } };
+const salvarCenarios = cs => localStorage.setItem(CHAVE, JSON.stringify(cs));
+
+let cenarios = lerCenarios();
+
+function atualizarAporteSugerido() {
+  const vf = +$("valorFinanciado").value, ta = +$("taxaFin").value / 100, pa = +$("prazoAnos").value, tipo = $("tipo").value;
+  if (!vf || !ta || !pa) return;
+  const r = calcularFinanciamento(vf, ta, pa, tipo);
+  $("aporteMensal").value = r.meses[0].parcela.toFixed(2);
+}
+["valorFinanciado", "taxaFin", "prazoAnos", "tipo"].forEach(id => $(id).addEventListener("input", atualizarAporteSugerido));
+
+function calcularCenario(c) {
+  const { valorFinanciado, taxaAnual, prazoAnos, tipo } = c.financiamento;
+  const fin = calcularFinanciamento(valorFinanciado, taxaAnual, prazoAnos, tipo);
+  const inv = evoluirInvestimento(c.investimento.valorInicial, c.investimento.aporteMensal, c.investimento.taxaAnual, fin.meses.length);
+  const patrimonio = patrimonioFinal(valorFinanciado, inv.saldoFinal);
+  return { fin, inv, patrimonio };
+}
+
+function desenharGrafico(canvas, fin, inv) {
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const maxY = Math.max(fin.meses[0].saldoDevedor, inv.saldoFinal, 1);
+  const n = fin.meses.length;
+  const x = i => n === 1 ? 10 : (i / (n - 1)) * (w - 20) + 10;
+  const y = v => h - 10 - (v / maxY) * (h - 20);
+  const linha = (pontos, cor) => {
+    ctx.strokeStyle = cor; ctx.lineWidth = 2; ctx.beginPath();
+    pontos.forEach((v, i) => i === 0 ? ctx.moveTo(x(i), y(v)) : ctx.lineTo(x(i), y(v)));
+    ctx.stroke();
+  };
+  linha(fin.meses.map(m => m.saldoDevedor), "#e06666");
+  linha(inv.meses.map(m => m.saldo), "#6699e0");
+}
+
+function linhaMesAMes(fin, inv) {
+  return fin.meses.map((m, i) => `<tr>
+    <td class="num">${m.mes}</td><td class="num">${fmt(m.parcela)}</td><td class="num">${fmt(m.juros)}</td>
+    <td class="num">${fmt(m.amortizacao)}</td><td class="num">${fmt(m.saldoDevedor)}</td>
+    <td class="num">${fmt(inv.meses[i].saldo)}</td>
+  </tr>`).join("");
+}
+
+function render() {
+  const linhas = cenarios.map(c => ({ c, ...calcularCenario(c) }))
+    .sort((a, b) => b.patrimonio - a.patrimonio);
+
+  $("comparativoCorpo").innerHTML = linhas.map(({ c, fin, inv, patrimonio }) => `<tr>
+    <td>${c.nome || "(sem nome)"}</td>
+    <td class="num">${fmt(fin.totalPago)}</td>
+    <td class="num">${fmt(fin.totalJuros)}</td>
+    <td class="num">${fmt(inv.saldoFinal)}</td>
+    <td class="num">${fmt(patrimonio)}</td>
+  </tr>`).join("");
+
+  $("cards").innerHTML = linhas.map(({ c, fin, inv, patrimonio }) => `
+    <div class="card" data-id="${c.id}">
+      <h3>${c.nome || "(sem nome)"} <button type="button" class="remover" data-id="${c.id}">remover</button></h3>
+      <div class="resumo">
+        <span>total pago: <b>${fmt(fin.totalPago)}</b></span>
+        <span>total juros: <b>${fmt(fin.totalJuros)}</b></span>
+        <span>saldo investido: <b>${fmt(inv.saldoFinal)}</b></span>
+        <span>patrimônio final: <b>${fmt(patrimonio)}</b></span>
+      </div>
+      <canvas width="600" height="160"></canvas>
+      <details>
+        <summary>tabela mês a mês</summary>
+        <table>
+          <thead><tr><th class="num">Mês</th><th class="num">Parcela</th><th class="num">Juros</th><th class="num">Amortização</th><th class="num">Saldo devedor</th><th class="num">Saldo investido</th></tr></thead>
+          <tbody>${linhaMesAMes(fin, inv)}</tbody>
+        </table>
+      </details>
+    </div>
+  `).join("");
+
+  [...$("cards").querySelectorAll("canvas")].forEach((canvas, i) => desenharGrafico(canvas, linhas[i].fin, linhas[i].inv));
+  $("cards").querySelectorAll(".remover").forEach(btn => btn.onclick = () => {
+    cenarios = cenarios.filter(c => c.id !== btn.dataset.id);
+    salvarCenarios(cenarios);
+    render();
+  });
+
+  $("vazio").hidden = cenarios.length > 0;
+  $("comparativo").hidden = cenarios.length === 0;
+}
+
+$("novoCenario").addEventListener("submit", e => {
+  e.preventDefault();
+  const c = {
+    id: String(Date.now()),
+    nome: $("nome").value.trim(),
+    financiamento: {
+      valorFinanciado: +$("valorFinanciado").value,
+      taxaAnual: +$("taxaFin").value / 100,
+      prazoAnos: +$("prazoAnos").value,
+      tipo: $("tipo").value,
+    },
+    investimento: {
+      valorInicial: +$("valorInicial").value,
+      aporteMensal: +$("aporteMensal").value,
+      taxaAnual: +$("taxaInv").value / 100,
+    },
+  };
+  cenarios.push(c);
+  salvarCenarios(cenarios);
+  e.target.reset();
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
