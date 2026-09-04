@@ -11,6 +11,15 @@
         ],
         "createdAt": "2026-09-04T00:35:25.632Z",
         "reason": "model decided: utilitarian data-table dashboard for a personal scraper; deliberately minimal type scale (12/14/18px), not a content page. User asked for mobile layout only, not a visual redesign."
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "financiamento.html"
+        ],
+        "createdAt": "2026-09-04T17:49:59.699Z",
+        "reason": "h2 is an intentional de-emphasized uppercase section label (12px, --mut, letter-spacing), styled to sit near body size and distinguished by case/weight/color rather than size — not a competing heading tier. h1/body ratio already fixed to 1.43."
       }
     ]
   }
