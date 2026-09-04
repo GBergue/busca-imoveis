@@ -127,8 +127,42 @@ verificados externamente:
 
 ## Fora de escopo / próximos passos possíveis
 
-Entrada/valor à vista do imóvel, IR sobre rendimento, valorização do
-imóvel, correção monetária (TR/IPCA) no saldo devedor, comparação
-"comprar à vista vs. investir tudo" como modelo alternativo, exportar/
-importar cenários (JSON), integração com a lista de imóveis (puxar
-preço automaticamente).
+Entrada/valor à vista do imóvel, correção monetária (TR/IPCA) no saldo
+devedor, comparação "comprar à vista vs. investir tudo" como modelo
+alternativo, exportar/importar cenários (JSON), integração com a lista
+de imóveis (puxar preço automaticamente).
+
+## Atualização: amortização extra, valorização, IR e cenário de aluguel
+
+Adicionados depois da primeira versão:
+
+- **Amortização extra**: campo opcional no financiamento
+  (`amortizacaoExtra: { valor, periodicidadeMeses }`). A cada
+  `periodicidadeMeses`, soma `valor` à amortização do mês — a parcela
+  nominal não muda ("reduz prazo"), então `meses` sai mais curto que
+  `prazoAnos*12` quando o valor extra é maior que zero.
+- **Valorização do imóvel**: campo `valorizacaoAnual` (%) no
+  financiamento. `valorImovelFinal()` capitaliza o valor financiado
+  mensalmente por essa taxa, pelo número de meses que o financiamento
+  durou (o mesmo horizonte da amortização extra).
+- **IR sobre o investimento**: campo `aliquotaIR` (%) no bloco
+  investimento (compartilhado entre financiamento e aluguel).
+  `aplicarIR()` aplica a alíquota sobre o ganho (`saldoFinal -
+  totalAportado`), nunca sobre o principal.
+- **Cenário "aluguel"**: novo `tipo: "aluguel"` no lugar de
+  `"financiamento"`. Dados: `aluguel: { valorMensal, prazoAnos }` (sem
+  reajuste automático do aluguel — fixo pelo prazo; crie outro cenário
+  para comparar valores de aluguel diferentes). O aporte mensal
+  investido é um campo manual, sem vínculo automático com a parcela do
+  financiamento (decisão do usuário: comparar por orçamento igual foi
+  descartado a favor de liberdade pra simular qualquer aporte).
+  Patrimônio final = só o saldo investido líquido de IR (sem imóvel).
+  Horizonte da simulação = `prazoAnos` do próprio cenário de aluguel,
+  independente do prazo de qualquer financiamento cadastrado.
+
+Pegadinha de implementação: um `<fieldset hidden>` não isenta seus
+campos `required` da validação nativa do form — o `hidden` só isenta o
+próprio elemento, não descendentes. O toggle de tipo de cenário
+também precisa alternar `required` nos campos de financiamento
+(`valorFinanciado`, `taxaFin`, `prazoAnos`), senão o submit falha
+silenciosamente quando o cenário de aluguel está selecionado.
