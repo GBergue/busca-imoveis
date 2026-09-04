@@ -38,3 +38,13 @@ Rode `scrape.mjs` de novo para aplicar (os campos do override vencem os raspados
 | `data.json`     | fonte da verdade (lista de imóveis) |
 | `data.js`       | mesma lista, gerada para o dashboard |
 | `overrides.json`| correções manuais por URL |
+| `condominios.js`| características por condomínio (curado à mão); o dashboard casa cada imóvel a um condomínio por palavra-chave |
+
+## Condomínios
+
+`condominios.js` guarda o que cada condomínio tem (elevador, portaria, piscina,
+playground, etc.) — `true`/`false`/`null` (não sei). O dashboard olha
+título + descrição + endereço + url do imóvel e, no primeiro `match` que bater,
+preenche a coluna **Condomínio**. Passe o mouse no nome para ver as
+características. Errou o casamento ou faltou um condomínio? Edite o arquivo
+(nomes mais específicos primeiro).

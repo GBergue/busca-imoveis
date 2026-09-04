@@ -28,6 +28,13 @@
   .vazio { color: var(--mut); padding: 40px 0; }
   #ordenar { display: none; }
   .tbwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cats { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 12px; font-size: 13px; }
+  .cats label { white-space: nowrap; cursor: pointer; }
+  .cats:empty { display: none; }
+  #editbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; font-size: 13px; color: var(--mut); }
+  #editbar button { padding: 4px 8px; border: 1px solid var(--bd); border-radius: 6px; font: inherit; background: transparent; color: inherit; cursor: pointer; }
+  td[contenteditable] { outline: none; }
+  td[contenteditable]:focus { background: #6cf3; box-shadow: inset 0 0 0 1px #6cf; }
 
   @media (max-width: 700px) {
     body { padding: 12px; }
@@ -54,7 +61,7 @@
 <h1>Busca de Imóveis</h1>
 
 <div class="barra">
-  <input id="q" type="search" placeholder="bairro, cidade, título…">
+  <input id="q" type="search" placeholder="bairro, condomínio, título…">
   <select id="quartos">
     <option value="">quartos (todos)</option>
     <option value="1">1+</option><option value="2">2+</option>
@@ -63,6 +70,13 @@
   <input id="pmin" type="number" placeholder="preço mín">
   <input id="pmax" type="number" placeholder="preço máx">
   <select id="ordenar" aria-label="ordenar por"></select>
+</div>
+
+<div class="cats" id="cats"></div>
+<div id="editbar" hidden>
+  <span>✏️ edição local ativa — clique numa célula pra editar</span>
+  <button type="button" id="baixar">baixar overrides.json</button>
+  <button type="button" id="limpar">limpar edições</button>
 </div>
 
 <div class="resumo" id="resumo"></div>
@@ -76,28 +90,67 @@
 <div class="vazio" id="vazio" hidden>Nenhum imóvel. Rode <code>node scrape.mjs &lt;url&gt;</code> e recarregue.</div>
 
 <script src="data.js"></script>
+<script src="condominios.js"></script>
 <script>
+const COND_AMEN = {
+  elevador: "elevador", portaria: "portaria", piscina: "piscina",
+  churrasqueira: "churrasqueira", playground: "playground", academia: "academia",
+  salao_festas: "salão de festas", salao_jogos: "salão de jogos", quadra: "quadra",
+};
+
+function achaCond(r) {
+  const hay = `${r.titulo} ${r.descricao} ${r.endereco || ""} ${r.bairro || ""} ${r.url}`.toLowerCase();
+  const c = (window.CONDOMINIOS || []).find(c => c.match.some(m => hay.includes(m)));
+  return c ? c.nome : "";
+}
+
+function condTitle(nome) {
+  const c = (window.CONDOMINIOS || []).find(c => c.nome === nome);
+  if (!c) return "";
+  const tem = Object.keys(COND_AMEN).filter(k => c[k] === true).map(k => COND_AMEN[k]);
+  const nao = Object.keys(COND_AMEN).filter(k => c[k] === false).map(k => COND_AMEN[k]);
+  return [
+    tem.length ? "tem: " + tem.join(", ") : "",
+    nao.length ? "não tem: " + nao.join(", ") : "",
+    c.obs || "",
+  ].filter(Boolean).join(" — ");
+}
+
 const COLS = [
   { k: "foto",       t: "",          fmt: v => v ? `<img src="${v}" loading="lazy">` : "", sort: false },
   { k: "titulo",     t: "Anúncio",   fmt: (v, r) => `<a href="${r.url}" target="_blank" rel="noopener">${v || r.url}</a>` +
                                                     (r.caracteristicas?.length ? `<div class="tags">${r.caracteristicas.join(" · ")}</div>` : "") },
-  { k: "tipo",       t: "Tipo" },
-  { k: "bairro",     t: "Bairro" },
-  { k: "cidade",     t: "Cidade" },
-  { k: "quartos",    t: "Q",  m: "Quartos",   num: true },
-  { k: "suites",     t: "Su", m: "Suítes",    num: true },
-  { k: "banheiros",  t: "Ba", m: "Banheiros", num: true },
-  { k: "vagas",      t: "Vg", m: "Vagas",     num: true },
-  { k: "area_util",  t: "m²", m: "Área útil (m²)", num: true, fmt: v => v ?? "" },
-  { k: "preco",      t: "Preço", num: true, fmt: v => v == null ? "" : "R$ " + v.toLocaleString("pt-BR") },
+  { k: "tipo",       t: "Tipo", ed: true },
+  { k: "bairro",     t: "Bairro", ed: true },
+  { k: "cond",       t: "Condomínio", ed: true, fmt: v => v ? `<span title="${condTitle(v).replace(/"/g, "&quot;")}">${v}</span>` : "" },
+  { k: "quartos",    t: "Q",  m: "Quartos",   num: true, ed: true },
+  { k: "suites",     t: "Su", m: "Suítes",    num: true, ed: true },
+  { k: "banheiros",  t: "Ba", m: "Banheiros", num: true, ed: true },
+  { k: "vagas",      t: "Vg", m: "Vagas",     num: true, ed: true },
+  { k: "area_util",  t: "m²", m: "Área útil (m²)", num: true, ed: true, fmt: v => v ?? "" },
+  { k: "preco",      t: "Preço", num: true, ed: true, fmt: v => v == null ? "" : "R$ " + v.toLocaleString("pt-BR") },
   { k: "rs_m2",      t: "R$/m²", num: true, fmt: v => v == null ? "" : Math.round(v).toLocaleString("pt-BR") },
-  { k: "condominio", t: "Cond.", m: "Condomínio", num: true, fmt: v => v == null ? "" : "R$ " + v.toLocaleString("pt-BR") },
+  { k: "condominio", t: "Cond. R$", m: "Condomínio (R$)", num: true, ed: true, fmt: v => v == null ? "" : "R$ " + v.toLocaleString("pt-BR") },
 ];
 
-const dados = (window.IMOVEIS || []).map(r => ({
-  ...r,
-  rs_m2: (r.preco && r.area_util) ? r.preco / r.area_util : null,
-}));
+// edição no browser: só quando aberto localmente (file:// ou localhost)
+const LOCAL = location.protocol === "file:" || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+const NUM = new Set(["quartos", "suites", "banheiros", "vagas", "area_util", "area_total", "preco", "condominio", "iptu"]);
+
+const lerOverrides = () => { try { return JSON.parse(localStorage.getItem("overrides")) || {}; } catch { return {}; } };
+
+function construir() {
+  const ov = lerOverrides();
+  return (window.IMOVEIS || []).map(base => {
+    const o = ov[base.url] || {};
+    const r = { ...base, ...o };
+    if (!("cond" in o)) r.cond = achaCond(r);
+    r.rs_m2 = (r.preco && r.area_util) ? r.preco / r.area_util : null;
+    return r;
+  });
+}
+
+let dados = construir();
 
 let ordem = { k: "rs_m2", dir: 1 };
 
@@ -123,14 +176,65 @@ COLS.filter(c => c.sort !== false).forEach(c => {
 });
 ord.onchange = () => { ordem.k = ord.value; ordem.dir = 1; render(); };
 
+// categorias de cada imóvel: características do anúncio + amenidades do condomínio
+function tagsDe(r) {
+  const s = new Set((r.caracteristicas || []).map(t => t.toLowerCase().replace(/\s*24h?$/, "").trim()));
+  const c = (window.CONDOMINIOS || []).find(c => c.nome === r.cond);
+  if (c) for (const k in COND_AMEN) if (c[k] === true) s.add(COND_AMEN[k]);
+  return s;
+}
+
+const cats = $("cats");
+[...new Set(dados.flatMap(r => [...tagsDe(r)]))].sort((a, b) => a.localeCompare(b)).forEach(t => {
+  const l = document.createElement("label");
+  l.innerHTML = `<input type="checkbox" value="${t}"> ${t}`;
+  cats.appendChild(l);
+});
+cats.addEventListener("change", render);
+const catsSel = () => [...cats.querySelectorAll("input:checked")].map(i => i.value);
+
+if (LOCAL) {
+  $("editbar").hidden = false;
+  $("baixar").onclick = () => {
+    const blob = JSON.stringify({ _comentario: "Correções manuais por URL. Rode scrape.mjs de novo para aplicar.", ...lerOverrides() }, null, 2);
+    const a = document.createElement("a");
+    a.href = "data:application/json;charset=utf-8," + encodeURIComponent(blob);
+    a.download = "overrides.json";
+    a.click();
+  };
+  $("limpar").onclick = () => {
+    localStorage.removeItem("overrides");
+    dados = construir();
+    render();
+  };
+  $("corpo").addEventListener("focusout", e => {
+    const td = e.target.closest("td[contenteditable]");
+    if (!td) return;
+    const url = td.parentElement.dataset.url, k = td.dataset.k;
+    const txt = td.textContent.trim();
+    let val = txt;
+    if (NUM.has(k)) {
+      const n = Number(txt.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, ""));
+      val = txt === "" || Number.isNaN(n) ? null : n;
+    }
+    const ov = lerOverrides();
+    ov[url] = { ...ov[url], [k]: val };
+    localStorage.setItem("overrides", JSON.stringify(ov));
+    dados = construir();
+    render();
+  });
+}
+
 function filtrar() {
   const q = $("q").value.trim().toLowerCase();
   const mq = +$("quartos").value || 0;
   const pmin = +$("pmin").value || 0;
   const pmax = +$("pmax").value || Infinity;
+  const cs = catsSel();
   return dados.filter(r => {
-    if (r.erro) return !q && !mq && !pmin && pmax === Infinity;
-    if (q && !`${r.titulo} ${r.bairro} ${r.cidade} ${r.tipo}`.toLowerCase().includes(q)) return false;
+    if (r.erro) return !q && !mq && !pmin && pmax === Infinity && !cs.length;
+    if (q && !`${r.titulo} ${r.bairro} ${r.cond} ${r.tipo}`.toLowerCase().includes(q)) return false;
+    if (cs.length) { const tg = tagsDe(r); if (!cs.every(t => tg.has(t))) return false; }
     if (mq && !(r.quartos >= mq)) return false;
     if (r.preco != null && (r.preco < pmin || r.preco > pmax)) return false;
     if (r.preco == null && (pmin || pmax !== Infinity)) return false;
@@ -154,11 +258,12 @@ function render() {
   const corpo = document.getElementById("corpo");
   corpo.innerHTML = linhas.map(r => r.erro
     ? `<tr class="erro"><td></td><td><a href="${r.url}" target="_blank" rel="noopener">${r.url}</a></td><td colspan="${COLS.length - 2}">erro: ${r.erro}</td></tr>`
-    : "<tr>" + COLS.map(c => {
+    : `<tr data-url="${r.url}">` + COLS.map(c => {
         const v = r[c.k];
-        const val = c.fmt ? c.fmt(v, r) : (v ?? "");
+        const editavel = LOCAL && c.ed;
+        const val = editavel ? (v ?? "") : (c.fmt ? c.fmt(v, r) : (v ?? ""));
         const lbl = c.k === "titulo" ? "" : (c.m || c.t);
-        return `<td class="${c.k}${c.num ? " num" : ""}"${lbl ? ` data-label="${lbl}"` : ""}>${val}</td>`;
+        return `<td class="${c.k}${c.num ? " num" : ""}"${lbl ? ` data-label="${lbl}"` : ""}${editavel ? ` contenteditable data-k="${c.k}"` : ""}>${val}</td>`;
       }).join("") + "</tr>"
   ).join("");
 
